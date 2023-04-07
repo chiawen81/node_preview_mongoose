@@ -1,5 +1,8 @@
 const http = require("http");
 const mongoose = require('mongoose');
+const Room = require("./models/room");
+const { ObjectId } = require('mongoose').Types;
+let body = "";
 
 // 連接資料庫
 mongoose.connect('mongodb://localhost:27017/hotel')
@@ -10,47 +13,6 @@ mongoose.connect('mongodb://localhost:27017/hotel')
         console.log('資料庫連線失敗');
         console.log(error);
     });
-
-
-// 設置schema
-const roomSchema = new mongoose.Schema({
-    // 定義資料的型態、是否必填、預設值、是否要顯示在回傳的資料中
-    name: String,
-    price: {
-        type: Number,                     // 定義資料型態
-        default: 0,                       // 定義預設值
-        required: [true, '價格未填寫'],     // 定義是否必填，並且可以自訂錯誤訊息
-        select: false                     // 定義是否要顯示在回傳的資料中
-    },
-    rating: Number,
-    creatTime: {
-        type: Date,
-        default: Date.now,                // 定義預設值為當下時間
-        select: false                     // 定義是否要顯示在回傳的資料中
-    }
-}, {
-    // 變更schema預設值的設定
-    versionKey: false,                    // 移除___v欄位
-});
-
-
-// 建立model
-const Room = mongoose.model("Room", roomSchema);
-//                        ^^^^^^  ^^^^^^^^^^
-//          model名稱/collection  schema名稱
-// note：model的變數通常會大寫開頭
-
-
-Room.create({
-    name: "美麗大圓房9",
-    price: 3800,
-    rating: 4.8
-}).then(() => {
-    console.log('資料新增成功');
-}).catch((error) => {
-    console.log(`資料儲存失敗，錯誤訊息：${error}`);
-});
-
 
 
 // // 實例化model（新增資料）
@@ -70,23 +32,89 @@ Room.create({
 
 
 
+const requestListener = async (req, res) => {
+    // 設定表頭
+    const headers = {
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, Content-Length, X-Requested-With',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'PATCH, POST, GET,OPTIONS,DELETE',
+        'Content-Type': 'application/json'
+    };
+
+    // 取得body資料
+    req.on('data', chunk => {
+        body += chunk;
+    });
+    console.log('body', body);
+
+    if ((req.url == "/rooms") && (req.method == "GET")) {
+        const rooms = await Room.find();
+        res.writeHead(200, headers);
+        res.write(JSON.stringify({
+            "status": "SUCCESS",
+            rooms
+        }));
+        res.end();
+
+    } else if ((req.url == "/rooms") && (req.method == "POST")) {
+        req.on("data", async () => {
+            try {
+                const data = JSON.parse(body);
+                console.log('data', data);
+
+                // 創建資料
+                const newRoom = await Room.create({
+                    name: data.name,
+                    price: data.price,
+                    rating: data.rating
+                });
+
+                res.writeHead(200, headers);
+                res.write(JSON.stringify({
+                    "status": "SUCCESS",
+                    newRoom
+                }));
+                res.end();
+
+            } catch (error) {
+                console.log(`新增資料有誤，請見錯誤訊息:${error}`);
+                res.end();
+            };
+        });
+
+    } else if ((req.url == "/rooms") && (req.method == "DELETE")) {
+        const room = await Room.deleteMany({});
+        res.writeHead(200, headers);
+        res.write(JSON.stringify({
+            "status": "SUCCESS",
+            room: []
+        }));
+        res.end();
+
+    } else if ((req.url.includes("/rooms/")) && (req.method == "DELETE")) {
+        console.log(1213);
+        const targetId = "642f945df69cc9edc1789c25";
+
+        Room.findByIdAndUpdate(targetId, { "name": 'test2' }).then(() => {
+            console.log('test success');
+            res.writeHead(200, headers);
+            res.write(JSON.stringify({
+                "status": "SUCCESS",
+            }));
+            res.end();
+
+        }).catch((error) => {
+            res.writeHead(200, headers);
+            res.write(JSON.stringify({
+                "status": "FAILD",
+                "emg": error
+            }));
+            res.end();
+        });
+    };
 
 
-// const init = async () => {
-//     const AllPost = await Post.find();  // 非同步語法，會等資料庫回傳資料後，才會繼續往下執行
-//     // find()語法，他本身就是一個非同步語法
-
-//     console.log(AllPost)
-// }
-// init();
-
-// schema 結束
-
-
-const requestListener = (req, res) => {
-    console.log(req.url);
-    res.end();
-}
+};
 
 const server = http.createServer(requestListener);
 server.listen(3005);
